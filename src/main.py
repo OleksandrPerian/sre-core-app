@@ -38,3 +38,9 @@ async def record_visit(visitor_id: str):
             visitor_id
         )
         return {"status": "success", "recorded": visitor_id}
+
+@app.get("/stats")
+async def get_stats(): 
+    async with app.state.db_pool.acquire() as conn:
+        total_visits = await conn.fetchval("SELECT COUNT(*) FROM visits")
+    return {"total_visits": total_visits}
