@@ -29,3 +29,12 @@ async def lifespan(app: FastAPI):
     await app.state.db_pool.close()
 
 app = FastAPI(lifespan=lifespan)
+
+@app.post("/visit")
+async def record_visit(visitor_id: str):
+    async with app.state.db_pool.acquire() as conn:
+        await conn.execute(
+            "INSERT INTO visits (visitor_id) VALUES ($1)",
+            visitor_id
+        )
+        return {"status": "success", "recorded": visitor_id}
