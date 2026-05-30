@@ -13,10 +13,10 @@ RUN groupadd -g 10001 appgroup && \
 
 WORKDIR /home/appuser/app
 
-COPY --from=builder /root/.local /home/appuser/.local
+COPY --chown=10001:10001 --from=builder /root/.local /home/appuser/.local
 COPY --chown=10001:10001 src/ ./src
 
-ENV PATH=/home/appuser/local/bin:$PATH
+ENV PATH=/home/appuser/.local/bin:$PATH
 ENV PYTHONPATH=/home/appuser/app
 
 USER 10001
