@@ -3,6 +3,7 @@ kind: Kustomization
 
 resources:
   - k8s/postgres.yaml
+  - k8s/app.yaml
 
 secretGenerator:
   - name: postgres-secret
