@@ -6,6 +6,11 @@ resources:
   - k8s/app.yaml
   - k8s/ingress.yaml
 
+images:
+  - name: fastapi-app:local
+    newName: ghcr.io/oleksandrperian/sre-core-app
+    newTag: latest
+
 secretGenerator:
   - name: postgres-secret
     envs:

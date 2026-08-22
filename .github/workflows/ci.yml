@@ -1,28 +1,36 @@
-name: Continuous Integration
+name: CI & Container Delivery
 
 on:
   push:
-    branches: [main]
+    branches: [ "main" ]
+    tags: [ "v*.*.*" ]
   pull_request:
-    branches: [main]
+    branches: [ "main" ]
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
 
 jobs:
   test:
+    name: Run Automated Tests
     runs-on: ubuntu-latest
+
     services:
-      db:
-        image: postgres:15-alpine
+      postgres:
+        image: postgres:16-alpine
         env:
-          POSTGRES_USER: visitor_app_user
-          POSTGRES_PASSWORD: testpassword123
           POSTGRES_DB: visitor_db
+          POSTGRES_USER: visitor_app_user
+          POSTGRES_PASSWORD: supersecretpassword
         ports:
           - 5432:5432
         options: >-
-          --health-cmd pg_isready
+          --health-cmd "pg_isready -U visitor_app_user -d visitor_db"
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
+
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -30,17 +38,62 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.12'
+          python-version: "3.12"
 
       - name: Install Dependencies
         run: |
-            python -m pip install --upgrade pip
-            pip install -r requirements.txt
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
 
-      - name: Run Tests
+      - name: Run Pytest
         env:
-          DB_USER: visitor_app_user
-          DB_PASSWORD: testpassword123
-          DB_NAME: visitor_db
+          PYTHONPATH: .
           DB_HOST: 127.0.0.1
-        run:  python -m pytest -v
+          DB_PORT: 5432
+          DB_NAME: visitor_db
+          DB_USER: visitor_app_user
+          DB_PASSWORD: supersecretpassword
+        run: |
+          pytest
+
+  build-and-push:
+    name: Build & Push Docker Image
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract Docker Metadata (Tags & Labels)
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
+            type=sha,format=short
+
+      - name: Build and Push Docker Image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
